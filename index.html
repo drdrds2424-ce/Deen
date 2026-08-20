@@ -42,6 +42,7 @@
     .btn { background: var(--primary); color: white; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 500; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; font-size: 0.9rem; }
     .btn:hover { background: var(--primary-hover); }
     .btn-success { background: var(--success); }
+    .btn-whatsapp { background: #25d366; color: white; font-weight: bold; }
     .btn-warning { background: var(--warning); color: #000; }
     .btn-danger { background: var(--danger); }
     .btn-secondary { background: #475569; }
@@ -57,8 +58,6 @@
     .modal.active { display: flex; }
     .modal-content { background: var(--card); padding: 20px; border-radius: 12px; width: 100%; max-width: 450px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-
-    .report-preview { background: #f1f5f9; padding: 14px; border-radius: 8px; border: 1px solid var(--border); font-size: 0.9rem; white-space: pre-wrap; font-family: monospace; max-height: 250px; overflow-y: auto; }
   </style>
 </head>
 <body>
@@ -108,11 +107,11 @@
     </div>
   </div>
 
-  <!-- واجهة سجل التسديدات مع زر مشاركة التقرير -->
+  <!-- واجهة سجل التسديدات مع زر إرسال للواتساب مباشرة -->
   <div class="card">
     <div class="card-header">
       <div class="card-title">سجل التسديدات</div>
-      <button class="btn btn-sm btn-success" onclick="openReportModal()">📲 مشاركة تقرير اليوم</button>
+      <button class="btn btn-sm btn-whatsapp" onclick="sendTodayPaymentsToWhatsApp()">📲 إرسال تسديدات اليوم للواتساب</button>
     </div>
     <div class="table-responsive">
       <table>
@@ -159,24 +158,10 @@
   </div>
 </div>
 
-<!-- نافذة معاينة التقرير ومشاركته -->
-<div class="modal" id="report-modal">
-  <div class="modal-content">
-    <div class="card-title" style="margin-bottom: 10px;">معاينة تقرير تسديدات اليوم</div>
-    <div id="report-text-preview" class="report-preview"></div>
-    <div class="modal-actions">
-      <button class="btn btn-primary" onclick="shareReport()">📲 مشاركة عبر التطبيقات</button>
-      <button class="btn btn-secondary" onclick="copyReportText()">📋 نسخ النص</button>
-      <button class="btn btn-danger" onclick="closeModal('report-modal')">إغلاق</button>
-    </div>
-  </div>
-</div>
-
 <script>
   let customers = JSON.parse(localStorage.getItem('debts_data')) || [];
   let paymentsHistory = JSON.parse(localStorage.getItem('payments_history')) || [];
   let selectedCustomerId = null;
-  let currentReportText = '';
 
   function saveData() {
     localStorage.setItem('debts_data', JSON.stringify(customers));
@@ -273,7 +258,7 @@
     }
   }
 
-  function openReportModal() {
+  function sendTodayPaymentsToWhatsApp() {
     const today = new Date().toLocaleDateString('ar-IQ');
     const todayPayments = paymentsHistory.filter(p => p.rawDate === today);
 
@@ -284,30 +269,19 @@
 
     let totalToday = todayPayments.reduce((sum, p) => sum + p.amount, 0);
 
-    currentReportText = `📄 *تقرير تسديدات اليوم*\n📅 التاريخ: ${today}\n----------------------------------\n`;
+    let message = `📋 *تقرير تسديدات اليوم*\n📅 *التاريخ:* ${today}\n━━━━━━━━━━━━━━━━━━━\n\n`;
+
     todayPayments.forEach((p, index) => {
-      currentReportText += `${index + 1}. *${p.customerName}* : ${p.amount.toLocaleString()} د.ع (${p.dateTime.split('-')[1] || p.dateTime})\n`;
+      const timeOnly = p.dateTime.split('-')[1] || p.dateTime;
+      message += `👤 *الزبون:* ${p.customerName}\n💵 *المبلغ المسدد:* ${p.amount.toLocaleString()} د.ع\n⏰ *الوقت:* ${timeOnly.trim()}\n-----------------------------------\n`;
     });
-    currentReportText += `----------------------------------\n💰 *المجموع الكلي:* ${totalToday.toLocaleString()} د.ع`;
 
-    document.getElementById('report-text-preview').innerText = currentReportText;
-    document.getElementById('report-modal').classList.add('active');
-  }
+    message += `\n💰 *إجمالي تسديدات اليوم:* ${totalToday.toLocaleString()} د.ع\n━━━━━━━━━━━━━━━━━━━`;
 
-  function shareReport() {
-    if (navigator.share) {
-      navigator.share({
-        title: 'تقرير تسديدات اليوم',
-        text: currentReportText
-      }).catch(() => {});
-    } else {
-      copyReportText();
-    }
-  }
+    const targetPhone = '9647854777816';
+    const whatsappUrl = `https://api.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(message)}`;
 
-  function copyReportText() {
-    navigator.clipboard.writeText(currentReportText);
-    alert('تم نسخ نص التقرير للحافظة بنجاح!');
+    window.open(whatsappUrl, '_system');
   }
 
   function exportBackup() {
