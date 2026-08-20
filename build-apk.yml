@@ -1,0 +1,39 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Create Cordova App & Build APK
+        run: |
+          cordova create debtapp com.debts.app "إدارة الديون"
+          cd debtapp
+          cordova platform add android
+          rm -rf www/*
+          cp -r ../index.html www/
+          cp -r ../manifest.json www/
+          cordova build android --no-telemetry
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Debts-App-Release
+          path: debtapp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          
