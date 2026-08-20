@@ -6,6 +6,8 @@
   <title>نظام إدارة الديون والتسديدات</title>
   <link rel="manifest" href="manifest.json">
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <!-- مكتبة تحويل HTML إلى PDF مباشرة للموبايل -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
     :root {
       --bg: #f8fafc;
@@ -57,13 +59,6 @@
     .modal.active { display: flex; }
     .modal-content { background: var(--card); padding: 24px; border-radius: 12px; width: 100%; max-width: 400px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
-
-    @media print {
-      body * { visibility: hidden; }
-      #print-area, #print-area * { visibility: visible; }
-      #print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
-      th, td { border: 1px solid #ccc; padding: 8px; }
-    }
   </style>
 </head>
 <body>
@@ -279,50 +274,56 @@
 
     let totalToday = todayPayments.reduce((sum, p) => sum + p.amount, 0);
 
-    let printContainer = document.createElement('div');
-    printContainer.id = 'print-area';
+    let element = document.createElement('div');
+    element.style.padding = '20px';
+    element.style.direction = 'rtl';
+    element.style.fontFamily = 'Tajawal, sans-serif';
     
     let htmlContent = `
-      <div style="direction: rtl; font-family: 'Tajawal', sans-serif; padding: 20px;">
-        <h2 style="text-align: center; margin-bottom: 8px;">تقرير تسديدات اليوم</h2>
-        <p style="text-align: center; color: #555; margin-bottom: 20px;">التاريخ: ${today}</p>
-        
-        <table style="width: 100%; border-collapse: collapse; text-align: right; margin-bottom: 20px;">
-          <thead>
-            <tr style="background-color: #f2f2f2;">
-              <th style="border: 1px solid #ddd; padding: 8px;">اسم الزبون</th>
-              <th style="border: 1px solid #ddd; padding: 8px;">المبلغ المسدد</th>
-              <th style="border: 1px solid #ddd; padding: 8px;">الوقت</th>
-            </tr>
-          </thead>
-          <tbody>
+      <h2 style="text-align: center; margin-bottom: 8px;">تقرير تسديدات اليوم</h2>
+      <p style="text-align: center; color: #555; margin-bottom: 20px;">التاريخ: ${today}</p>
+      
+      <table style="width: 100%; border-collapse: collapse; text-align: right; margin-bottom: 20px;">
+        <thead>
+          <tr style="background-color: #f2f2f2;">
+            <th style="border: 1px solid #ddd; padding: 10px;">اسم الزبون</th>
+            <th style="border: 1px solid #ddd; padding: 10px;">المبلغ المسدد</th>
+            <th style="border: 1px solid #ddd; padding: 10px;">الوقت</th>
+          </tr>
+        </thead>
+        <tbody>
     `;
 
     todayPayments.forEach(p => {
       htmlContent += `
         <tr>
-          <td style="border: 1px solid #ddd; padding: 8px;">${p.customerName}</td>
-          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${p.amount.toLocaleString()} د.ع</td>
-          <td style="border: 1px solid #ddd; padding: 8px;">${p.dateTime.split('-')[1] || p.dateTime}</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">${p.customerName}</td>
+          <td style="border: 1px solid #ddd; padding: 10px; font-weight: bold; color: green;">${p.amount.toLocaleString()} د.ع</td>
+          <td style="border: 1px solid #ddd; padding: 10px;">${p.dateTime.split('-')[1] || p.dateTime}</td>
         </tr>
       `;
     });
 
     htmlContent += `
-          </tbody>
-        </table>
-        <h3 style="text-align: left; background: #e2e8f0; padding: 10px; border-radius: 6px;">
-          مجموع تسديدات اليوم: ${totalToday.toLocaleString()} د.ع
-        </h3>
-      </div>
+        </tbody>
+      </table>
+      <h3 style="text-align: right; background: #e2e8f0; padding: 12px; border-radius: 6px;">
+        مجموع تسديدات اليوم: ${totalToday.toLocaleString()} د.ع
+      </h3>
     `;
 
-    printContainer.innerHTML = htmlContent;
-    document.body.appendChild(printContainer);
+    element.innerHTML = htmlContent;
 
-    window.print();
+    const opt = {
+      margin:       10,
+      filename:     `تسديدات_اليوم_${today.replace(/\//g, '-')}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2 },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
 
-    document.body.removeChild(printContainer);
+    // توليد وتحميل الملف مباشرة بداخل الموبايل
+    html2pdf().set(opt).from(element).save();
   }
 
   function exportBackup() {
