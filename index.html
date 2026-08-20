@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام إدارة الديون والتسديدات</title>
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --success: #16a34a;
+      --warning: #eab308;
+      --danger: #dc2626;
+      --border: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Tajawal', sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 20px; line-height: 1.5; }
+    .container { max-width: 900px; margin: 0 auto; }
+
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid var(--border); flex-wrap: wrap; gap: 10px; }
+    h1 { font-size: 1.5rem; color: var(--text); }
+    .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .total-badge { background: #eff6ff; color: var(--primary); padding: 8px 16px; border-radius: 8px; font-weight: bold; }
+
+    .card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 24px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+    .card-title { font-size: 1.1rem; font-weight: bold; }
+
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; outline: none; }
+    input:focus { border-color: var(--primary); }
+
+    .search-box { margin-bottom: 16px; }
+
+    .btn { background: var(--primary); color: white; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 500; cursor: pointer; transition: 0.2s; text-decoration: none; display: inline-block; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-success { background: var(--success); }
+    .btn-warning { background: var(--warning); color: #000; }
+    .btn-danger { background: var(--danger); }
+    .btn-secondary { background: #475569; }
+    .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
+
+    .table-responsive { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: right; }
+    th, td { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    th { background: #f1f5f9; color: var(--text-muted); font-weight: 500; font-size: 0.9rem; }
+
+    .actions { display: flex; gap: 6px; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); justify-content: center; align-items: center; padding: 16px; }
+    .modal.active { display: flex; }
+    .modal-content { background: var(--card); padding: 24px; border-radius: 12px; width: 100%; max-width: 400px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+    @media print {
+      body * { visibility: hidden; }
+      #print-area, #print-area * { visibility: visible; }
+      #print-area { position: absolute; left: 0; top: 0; width: 100%; padding: 20px; }
+      th, td { border: 1px solid #ccc; padding: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>نظام إدارة الديون</h1>
+    <div class="header-actions">
+      <button class="btn btn-sm btn-secondary" onclick="exportBackup()">💾 حفظ نسخة بالهاتف</button>
+      <button class="btn btn-sm btn-secondary" onclick="document.getElementById('import-file').click()">📂 استرجاع النسخة</button>
+      <input type="file" id="import-file" style="display: none;" accept=".json" onchange="importBackup(event)">
+      <div class="total-badge">مجموع الديون: <span id="total-debts">0</span> د.ع</div>
+    </div>
+  </header>
+
+  <!-- نموذج إضافة زبون -->
+  <div class="card">
+    <div class="card-title">إضافة زبون جديد</div>
+    <form id="add-customer-form" class="form-grid">
+      <input type="text" id="name" placeholder="اسم الزبون" required>
+      <input type="text" id="phone" placeholder="رقم الهاتف">
+      <input type="text" id="address" placeholder="العنوان">
+      <input type="number" id="amount" placeholder="مبلغ الدين" required min="0">
+      <button type="submit" class="btn">حفظ الزبون</button>
+    </form>
+  </div>
+
+  <!-- جدول عرض الديون مع خانة البحث -->
+  <div class="card">
+    <div class="card-title">قائمة الديون</div>
+    
+    <div class="search-box">
+      <input type="text" id="search-input" placeholder="🔍 ابحث عن اسم الزبون..." oninput="render()">
+    </div>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>الاسم</th>
+            <th>الهاتف</th>
+            <th>العنوان</th>
+            <th>المبلغ المتبقي</th>
+            <th>إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="customers-list"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- واجهة سجل التسديدات مع زر تصدير PDF -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">سجل التسديدات (التاريخ والوقت)</div>
+      <button class="btn btn-sm btn-success" onclick="exportTodayPDF()">📄 حفظ تسديدات اليوم (PDF)</button>
+    </div>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>اسم الزبون</th>
+            <th>المبلغ المسدد</th>
+            <th>تاريخ ووقت التسديد</th>
+          </tr>
+        </thead>
+        <tbody id="payments-history-list"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- نافذة التسديد -->
+<div class="modal" id="pay-modal">
+  <div class="modal-content">
+    <div class="card-title">خانة تسديد الدين</div>
+    <p id="pay-customer-name" style="margin-bottom: 12px; color: var(--text-muted); font-weight: bold;"></p>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <input type="number" id="pay-amount" placeholder="أدخل المبلغ المراد تسديده" min="1">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-success" onclick="confirmPayment()">موافق</button>
+      <button class="btn btn-danger" onclick="closeModal('pay-modal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- نافذة التعديل -->
+<div class="modal" id="edit-modal">
+  <div class="modal-content">
+    <div class="card-title">تعديل بيانات الزبون</div>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <input type="text" id="edit-name" placeholder="اسم الزبون">
+      <input type="text" id="edit-phone" placeholder="رقم الهاتف">
+      <input type="text" id="edit-address" placeholder="العنوان">
+      <input type="number" id="edit-amount" placeholder="مبلغ الدين الكلي">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-warning" onclick="confirmEdit()">حفظ التعديلات</button>
+      <button class="btn btn-danger" onclick="closeModal('edit-modal')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let customers = JSON.parse(localStorage.getItem('debts_data')) || [];
+  let paymentsHistory = JSON.parse(localStorage.getItem('payments_history')) || [];
+  let selectedCustomerId = null;
+
+  function saveData() {
+    localStorage.setItem('debts_data', JSON.stringify(customers));
+    localStorage.setItem('payments_history', JSON.stringify(paymentsHistory));
+    render();
+  }
+
+  function render() {
+    const list = document.getElementById('customers-list');
+    const historyList = document.getElementById('payments-history-list');
+    const searchQuery = document.getElementById('search-input') ? document.getElementById('search-input').value.toLowerCase().trim() : '';
+    
+    list.innerHTML = '';
+    historyList.innerHTML = '';
+    let total = 0;
+
+    const filteredCustomers = customers.filter(c => c.name.toLowerCase().includes(searchQuery));
+
+    filteredCustomers.forEach(c => {
+      total += Number(c.amount);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${c.name}</strong></td>
+        <td>${c.phone || '-'}</td>
+        <td>${c.address || '-'}</td>
+        <td style="color: var(--danger); font-weight: bold;">${Number(c.amount).toLocaleString()} د.ع</td>
+        <td>
+          <div class="actions">
+            <button class="btn btn-sm btn-success" onclick="openPayModal('${c.id}')">تسديد</button>
+            <button class="btn btn-sm btn-warning" onclick="openEditModal('${c.id}')">تعديل</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteCustomer('${c.id}')">حذف</button>
+          </div>
+        </td>
+      `;
+      list.appendChild(tr);
+    });
+
+    document.getElementById('total-debts').innerText = total.toLocaleString();
+
+    paymentsHistory.slice().reverse().forEach(p => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><strong>${p.customerName}</strong></td>
+        <td style="color: var(--success); font-weight: bold;">${Number(p.amount).toLocaleString()} د.ع</td>
+        <td style="color: var(--text-muted); font-size: 0.85rem;">${p.dateTime}</td>
+      `;
+      historyList.appendChild(tr);
+    });
+  }
+
+  document.getElementById('add-customer-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const newCustomer = {
+      id: Date.now().toString(),
+      name: document.getElementById('name').value,
+      phone: document.getElementById('phone').value,
+      address: document.getElementById('address').value,
+      amount: parseFloat(document.getElementById('amount').value) || 0
+    };
+    customers.push(newCustomer);
+    saveData();
+    e.target.reset();
+  });
+
+  function openPayModal(id) {
+    selectedCustomerId = id;
+    const customer = customers.find(c => c.id === id);
+    document.getElementById('pay-customer-name').innerText = `الزبون: ${customer.name} | المتبقي: ${customer.amount.toLocaleString()} د.ع`;
+    document.getElementById('pay-amount').value = '';
+    document.getElementById('pay-modal').classList.add('active');
+  }
+
+  function confirmPayment() {
+    const amount = parseFloat(document.getElementById('pay-amount').value);
+    if (!amount || amount <= 0) return;
+
+    const customer = customers.find(c => c.id === selectedCustomerId);
+    if (customer) {
+      customer.amount = Math.max(0, customer.amount - amount);
+      
+      const now = new Date();
+      const dateOnly = now.toLocaleDateString('ar-IQ');
+      const dateTimeString = dateOnly + ' - ' + now.toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
+      
+      paymentsHistory.push({
+        customerName: customer.name,
+        amount: amount,
+        dateTime: dateTimeString,
+        rawDate: dateOnly
+      });
+
+      saveData();
+      closeModal('pay-modal');
+    }
+  }
+
+  function exportTodayPDF() {
+    const today = new Date().toLocaleDateString('ar-IQ');
+    const todayPayments = paymentsHistory.filter(p => p.rawDate === today);
+
+    if (todayPayments.length === 0) {
+      alert('لا توجد تسديدات مسجلة لهذا اليوم!');
+      return;
+    }
+
+    let totalToday = todayPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    let printContainer = document.createElement('div');
+    printContainer.id = 'print-area';
+    
+    let htmlContent = `
+      <div style="direction: rtl; font-family: 'Tajawal', sans-serif; padding: 20px;">
+        <h2 style="text-align: center; margin-bottom: 8px;">تقرير تسديدات اليوم</h2>
+        <p style="text-align: center; color: #555; margin-bottom: 20px;">التاريخ: ${today}</p>
+        
+        <table style="width: 100%; border-collapse: collapse; text-align: right; margin-bottom: 20px;">
+          <thead>
+            <tr style="background-color: #f2f2f2;">
+              <th style="border: 1px solid #ddd; padding: 8px;">اسم الزبون</th>
+              <th style="border: 1px solid #ddd; padding: 8px;">المبلغ المسدد</th>
+              <th style="border: 1px solid #ddd; padding: 8px;">الوقت</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+
+    todayPayments.forEach(p => {
+      htmlContent += `
+        <tr>
+          <td style="border: 1px solid #ddd; padding: 8px;">${p.customerName}</td>
+          <td style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">${p.amount.toLocaleString()} د.ع</td>
+          <td style="border: 1px solid #ddd; padding: 8px;">${p.dateTime.split('-')[1] || p.dateTime}</td>
+        </tr>
+      `;
+    });
+
+    htmlContent += `
+          </tbody>
+        </table>
+        <h3 style="text-align: left; background: #e2e8f0; padding: 10px; border-radius: 6px;">
+          مجموع تسديدات اليوم: ${totalToday.toLocaleString()} د.ع
+        </h3>
+      </div>
+    `;
+
+    printContainer.innerHTML = htmlContent;
+    document.body.appendChild(printContainer);
+
+    window.print();
+
+    document.body.removeChild(printContainer);
+  }
+
+  function exportBackup() {
+    const backupData = {
+      customers: customers,
+      paymentsHistory: paymentsHistory,
+      exportDate: new Date().toISOString()
+    };
+
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `نسخة_احتياطية_ديون_${new Date().toLocaleDateString('ar-IQ').replace(/\//g, '-')}.json`;
+    a.click();
+  }
+
+  function importBackup(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (data.customers && data.paymentsHistory) {
+          if (confirm('هل تريد استبدال البيانات الحالية بالنسخة المحددة؟')) {
+            customers = data.customers;
+            paymentsHistory = data.paymentsHistory;
+            saveData();
+            alert('تم استرجاع البيانات بنجاح!');
+          }
+        } else {
+          alert('الملف المحدد غير صالح!');
+        }
+      } catch (err) {
+        alert('حدث خطأ أثناء قراءة الملف!');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function openEditModal(id) {
+    selectedCustomerId = id;
+    const customer = customers.find(c => c.id === id);
+    document.getElementById('edit-name').value = customer.name;
+    document.getElementById('edit-phone').value = customer.phone;
+    document.getElementById('edit-address').value = customer.address;
+    document.getElementById('edit-amount').value = customer.amount;
+    document.getElementById('edit-modal').classList.add('active');
+  }
+
+  function confirmEdit() {
+    const customer = customers.find(c => c.id === selectedCustomerId);
+    if (customer) {
+      customer.name = document.getElementById('edit-name').value;
+      customer.phone = document.getElementById('edit-phone').value;
+      customer.address = document.getElementById('edit-address').value;
+      customer.amount = parseFloat(document.getElementById('edit-amount').value) || 0;
+      saveData();
+      closeModal('edit-modal');
+    }
+  }
+
+  function deleteCustomer(id) {
+    if (confirm('هل أنت تأكد من حذف هذا الزبون؟')) {
+      customers = customers.filter(c => c.id !== id);
+      saveData();
+    }
+  }
+
+  function closeModal(modalId) {
+    document.getElementById(modalId).classList.remove('active');
+  }
+
+  render();
+</script>
+</body>
+</html>
